@@ -1,0 +1,64 @@
+name: TP4 - Intégration Continue Python
+
+# La CI se déclenche sur les Pull Requests (ou les pushs) vers la branche de dev
+on:
+  push:
+    branches: [ feature-ci-tp4 ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Étape de vérification générale (Compilation, Linting, Tests)
+  verification:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          make dependency
+
+      - name: 1. Vérification du style (Linting)
+        run: make check-style
+
+      - name: 2. Vérification des types
+        run: make check-type
+
+      - name: 3. Test de compilation (Exécution de main.py)
+        run: make compile
+
+      - name: 4. Exécution des tests unitaires et couverture
+        run: make test
+
+  # Étape de Build (Ne s'exécute QUE si le job 'verification' a réussi)
+  build:
+    runs-on: ubuntu-24.04
+    needs: verification  # <--- Assure la dépendance exigée par le TP
+
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          make dependency
+
+      - name: 5. Générer l'exécutable (Build)
+        run: make build
+
+      - name: 6. Vérifier la présence du binaire généré
+        run: make check-build-presence

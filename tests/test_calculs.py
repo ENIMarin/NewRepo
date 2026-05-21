@@ -25,6 +25,14 @@ class TestMultiplier:
         with pytest.raises(TypeError):
             multiplier("5", 2)
 
+class TestDiviser:
+    def test_entiers(self):
+        assert diviser(12, 3) == 4
+
+    def test_division_par_zero(self):
+        with pytest.raises(ZeroDivisionError):
+            diviser(10, 0)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
