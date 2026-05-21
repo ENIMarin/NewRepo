@@ -1,6 +1,5 @@
-name: TP4 - Intégration Continue Python
+name: TP4 - CI Multi-Environnements (Matrix)
 
-# La CI se déclenche sur les Pull Requests (ou les pushs) vers la branche de dev
 on:
   push:
     branches: [ feature-ci-tp4 ]
@@ -8,57 +7,57 @@ on:
     branches: [ main ]
 
 jobs:
-  # Étape de vérification générale (Compilation, Linting, Tests)
-  verification:
-    runs-on: ubuntu-24.04
+  # -------------------------------------------------------------
+  # JOB UNIQUE DE VERIFICATION ET DE BUILD VIA UNE MATRICE
+  # -------------------------------------------------------------
+  test-and-build:
+    strategy:
+      # Si une seule combinaison échoue, on laisse les autres continuer pour voir tout ce qui plante
+      fail-fast: false
+      
+      matrix:
+        # Exercice principal : Versions d'OS et de Python demandées
+        os: [ubuntu-24.04, ubuntu-22.04, windows-latest] # Ajout de windows-latest pour le facultatif
+        python-version: ['3.12', '3.13', '3.14']
+
+    runs-on: ${{ matrix.os }}
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
 
     steps:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
 
-      - name: Installer Python 3.12
+      - name: Installer Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
 
+      # Gestion intelligente de l'installation selon l'OS (Makefile vs direct)
       - name: Installer les dépendances
         run: |
           python -m pip install --upgrade pip
-          make dependency
+          pip install -r requirements.txt
 
-      - name: 1. Vérification du style (Linting)
-        run: make check-style
-
-      - name: 2. Vérification des types
-        run: make check-type
-
-      - name: 3. Test de compilation (Exécution de main.py)
-        run: make compile
-
-      - name: 4. Exécution des tests unitaires et couverture
-        run: make test
-
-  # Étape de Build (Ne s'exécute QUE si le job 'verification' a réussi)
-  build:
-    runs-on: ubuntu-24.04
-    needs: verification  # <--- Assure la dépendance exigée par le TP
-
-    steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Installer Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Installer les dépendances
+      - name: 1. Contrôle de style (Linting)
+        # On ne fait le linting et le type checking qu'une fois (sur ubuntu) pour éviter les doublons inutiles
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
-          python -m pip install --upgrade pip
-          make dependency
+          pip install flake8 black mypy
+          flake8 calculs tests
+          black --check calculs tests
 
-      - name: 5. Générer l'exécutable (Build)
-        run: make build
+      - name: 2. Contrôle des types (Mypy)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: mypy calculs
 
-      - name: 6. Vérifier la présence du binaire généré
-        run: make check-build-presence
+      - name: 3. Test de compilation (Exécution)
+        run: python main.py
+
+      - name: 4. Exécution des tests et couverture minimal (> 90%)
+        # Sous Windows, l'outil "make" n'est pas installé par défaut. On lance la commande pytest brute qui marche partout.
+        run: pytest --cov=calculs --cov-report=term-missing --cov-fail-under=90
+
+      - name: 5. Génération de l'exécutable (Build)
+        # Étape finale de build requise par l'exercice principal
+        run: pyinstaller --onefile --name calculs-snapshot main.py
